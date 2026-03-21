@@ -1,6 +1,5 @@
 """
 配置模块 - 从环境变量读取所有配置
-无需任何大模型API Key
 """
 import os
 from dataclasses import dataclass, field
@@ -20,6 +19,17 @@ class Config:
     )
     feishu_secret: Optional[str] = field(
         default_factory=lambda: os.environ.get("FEISHU_SECRET")
+    )
+
+    # ── Anthropic API Key（用于 Claude 大模型分析）────────────────────
+    # 申请地址：https://console.anthropic.com/
+    # 未设置时自动降级为规则引擎（分析质量较低，仅作兜底）
+    anthropic_api_key: Optional[str] = field(
+        default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY")
+    )
+    # Claude 模型版本（默认使用 claude-sonnet-4-6）
+    claude_model: str = field(
+        default_factory=lambda: os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
     )
 
     # ── 可选数据源 API Key（有免费替代方案）──────────────────────────

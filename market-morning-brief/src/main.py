@@ -2,7 +2,7 @@
 """
 市场晨报/晚报系统 - 主入口
 三地市场（A股/港股/美股）定时分析推送
-无需任何大模型，基于规则引擎自动分析
+优先使用 Claude 大模型深度分析，未配置 API Key 时自动降级为规则引擎
 
 调度时间表（CST, UTC+8）：
   09:00  →  A股+港股 开盘前分析（推送飞书）
@@ -34,6 +34,7 @@ from fetchers.news_fetcher import NewsFetcher
 from fetchers.market_data import MarketDataFetcher
 from fetchers.research_fetcher import ResearchFetcher
 from fetchers.economic_calendar import EconomicCalendarFetcher
+from analyzers.claude_analyzer import ClaudeAnalyzer
 from analyzers.rule_analyzer import RuleAnalyzer
 from notifiers.feishu import FeishuNotifier
 
@@ -72,7 +73,15 @@ class MarketBriefOrchestrator:
         self.market_fetcher = MarketDataFetcher()
         self.research_fetcher = ResearchFetcher()
         self.calendar_fetcher = EconomicCalendarFetcher()
-        self.analyzer = RuleAnalyzer()
+        if config.anthropic_api_key:
+            self.analyzer = ClaudeAnalyzer(
+                api_key=config.anthropic_api_key,
+                model=config.claude_model,
+            )
+            logger.info(f"分析引擎：Claude 大模型（{config.claude_model}）")
+        else:
+            self.analyzer = RuleAnalyzer()
+            logger.warning("未配置 ANTHROPIC_API_KEY，降级使用规则引擎（分析质量较低）")
         self.notifier = FeishuNotifier(
             webhook_urls=config.feishu_webhooks,
             secret=config.feishu_secret,
@@ -290,7 +299,7 @@ def run_scheduler(orchestrator: MarketBriefOrchestrator):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="三地股市智能晨报/晚报系统（规则引擎版，无需大模型）",
+        description="三地股市智能晨报/晚报系统（Claude 大模型分析，无 Key 时降级为规则引擎）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
@@ -322,7 +331,10 @@ def main():
     try:
         config.validate()
         logger.info("配置校验通过")
-        logger.info(f"  分析引擎: 规则引擎（无需大模型）")
+        if config.anthropic_api_key:
+            logger.info(f"  分析引擎: Claude 大模型（{config.claude_model}）")
+        else:
+            logger.warning("  分析引擎: 规则引擎（未配置 ANTHROPIC_API_KEY，分析质量较低）")
         logger.info(f"  飞书 Webhook 数量: {len(config.feishu_webhooks)}")
         logger.info(f"  关注板块: {', '.join(config.focus_sectors)}")
     except ValueError as e:
@@ -336,12 +348,17 @@ def main():
 
     if args.test:
         logger.info("发送测试消息...")
+        engine_label = (
+            f"Claude 大模型（{config.claude_model}）"
+            if config.anthropic_api_key
+            else "规则引擎（未配置 ANTHROPIC_API_KEY，分析质量较低）"
+        )
         success = orchestrator.notifier.send_alert(
             title="市场晨报系统测试",
             content=(
                 "飞书推送配置正常！\n\n"
                 f"系统信息：\n"
-                f"- 分析引擎：规则引擎（零API成本）\n"
+                f"- 分析引擎：{engine_label}\n"
                 f"- 关注板块：{', '.join(config.focus_sectors)}\n"
                 f"- 调度时间：亚洲 {config.asia_premarket_hour:02d}:{config.asia_premarket_minute:02d} / "
                 f"复盘 {config.asia_postmarket_hour:02d}:{config.asia_postmarket_minute:02d} / "

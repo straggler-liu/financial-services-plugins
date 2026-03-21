@@ -3,7 +3,11 @@
 """
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
+
+# 项目根目录（market-morning-brief/）
+_ROOT = Path(__file__).parent.parent
 
 
 @dataclass
@@ -102,9 +106,11 @@ class Config:
     log_level: str = field(
         default_factory=lambda: os.environ.get("LOG_LEVEL", "INFO")
     )
-    # 数据缓存目录
+    # 数据缓存目录（Windows/Linux 跨平台：默认与项目同级的 cache 文件夹）
     cache_dir: str = field(
-        default_factory=lambda: os.environ.get("CACHE_DIR", "/app/cache")
+        default_factory=lambda: os.environ.get(
+            "CACHE_DIR", str(_ROOT / "cache")
+        )
     )
 
     def validate(self):

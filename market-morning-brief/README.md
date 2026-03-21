@@ -10,230 +10,247 @@
 | 15:30 周一至五 | A股+港股 收盘复盘 + 对比早盘建议准确性 + 明日策略 |
 | 21:00 周一至五 | 美股 开盘前分析 + 当日亚洲盘回顾 |
 
-## 核心特点
+## 前置准备
 
-- **Claude 大模型分析** — 基于第一性原则框架（E/r/L/ρ）进行真实语义理解，理解否定句、跨事件联动、复合影响
-- **真实收盘复盘** — 对比早盘预测与实际走势，分析判断对错的原因，形成学习闭环
-- **数据可溯源** — 每条新闻/研报标注来源和链接，结论有据可查
-- **自动降级兜底** — 未配置 API Key 时自动使用规则引擎（关键词匹配，分析质量较低）
+在开始之前，准备好以下两项：
 
-## 快速开始（一键部署）
+| 项目 | 说明 | 获取方式 |
+|------|------|---------|
+| **Anthropic API Key** | Claude 大模型分析（强烈推荐） | [console.anthropic.com](https://console.anthropic.com/) |
+| **飞书机器人 Webhook** | 接收推送消息（必填） | 飞书群 > 设置 > 群机器人 > 添加机器人 > 自定义机器人 |
 
-### 前置条件
+> 未配置 `ANTHROPIC_API_KEY` 时，系统会降级为规则引擎（关键词匹配），分析质量明显下降，收盘复盘功能基本失效。
 
-1. **Anthropic API Key** → [console.anthropic.com](https://console.anthropic.com/) 申请（强烈推荐，未配置则降级为规则引擎）
-2. **飞书机器人 Webhook** → 飞书群 > 设置 > 群机器人 > 添加机器人 > 自定义机器人（免费）
-3. **Docker**（推荐）或 **Python 3.12+**
+---
 
-### Docker 部署（推荐）
+## Windows 部署（推荐）
 
-```bash
-# 1. 克隆仓库
+### 第一步：安装 Python
+
+1. 打开 https://www.python.org/downloads/，下载 Python **3.12+**
+2. 运行安装程序，**务必勾选** ✅ `Add Python to PATH`
+3. 安装完成后重启命令提示符
+
+### 第二步：下载项目
+
+```
 git clone https://github.com/straggler-liu/financial-services-plugins.git
-cd financial-services-plugins/market-morning-brief
-
-# 2. 一键部署
-bash deploy.sh
-
-# 脚本会引导你配置 .env（包括 ANTHROPIC_API_KEY），然后自动构建并启动
+cd financial-services-plugins\market-morning-brief
 ```
 
-### 手动 Docker 部署
+或直接下载 ZIP 解压，进入 `market-morning-brief` 文件夹。
 
-```bash
-# 1. 复制并编辑配置
-cp .env.example .env
-nano .env     # 填写 ANTHROPIC_API_KEY 和 FEISHU_WEBHOOK_URLS
+### 第三步：一键安装
 
-# 2. 启动
-docker-compose up -d
+双击 **`install.bat`**，脚本将自动：
+- 安装所有 Python 依赖（使用国内镜像加速）
+- 创建 `.env` 配置文件并打开记事本供填写
+- 创建 `cache` 目录
 
-# 3. 测试飞书连接
-docker-compose exec market-brief python src/main.py --test
+### 第四步：填写配置
 
-# 4. 立即触发（测试）
-docker-compose exec market-brief python src/main.py --now premarket_asia
-```
+在记事本中填写 `.env`：
 
-### 本地 Python 部署
-
-```bash
-pip install -r requirements.txt
-cp .env.example .env
-# 编辑 .env 填写 ANTHROPIC_API_KEY 和 FEISHU_WEBHOOK_URLS
-
-# 测试
-python src/main.py --test
-
-# 启动定时调度
-python src/main.py
-
-# 或后台运行
-nohup python src/main.py > cache/nohup.log 2>&1 &
-```
-
-## 配置说明
-
-编辑 `.env` 文件（完整说明见 `.env.example`）：
-
-```bash
-# 强烈推荐：Claude 大模型分析（未配置则降级为规则引擎）
-ANTHROPIC_API_KEY=sk-ant-...
+```ini
+# 强烈推荐：Claude 大模型分析
+ANTHROPIC_API_KEY=sk-ant-你的密钥
 
 # 必填：飞书 Webhook
-FEISHU_WEBHOOK_URLS=https://open.feishu.cn/...
+FEISHU_WEBHOOK_URLS=https://open.feishu.cn/open-apis/bot/v2/hook/你的webhook
 
-# 可选：关注的板块和自选股
-FOCUS_SECTORS=科技,新能源,半导体,消费,医药
+# 关注的板块（逗号分隔）
+FOCUS_SECTORS=科技,新能源,半导体,消费,医药,金融,房地产,人工智能
+
+# 自选标的（可选，A股代码/港股代码/美股Ticker）
 WATCHLIST=600519,00700,AAPL,NVDA
-
-# 可选：调整推送时间（CST）
-ASIA_PREMARKET_HOUR=9    # 亚洲开盘前
-ASIA_POSTMARKET_HOUR=15  # 亚洲收盘后
-US_PREMARKET_HOUR=21     # 美股开盘前（冬令时改为22）
 ```
 
-### 美国夏令时调整
+保存并关闭记事本。
 
-| 时期 | 美股开盘 CST | 建议设置 US_PREMARKET_HOUR |
-|------|-------------|--------------------------|
-| 夏令时（3月第2周 ~ 11月第1周） | 21:30 CST | 21 |
-| 冬令时（其余时间） | 22:30 CST | 22 |
+### 第五步：测试推送
 
-## 分析引擎：Claude 大模型
+打开命令提示符，在项目目录下运行：
 
-系统使用 Claude 对所有市场数据进行第一性原则深度分析，而不是简单的关键词匹配：
+```cmd
+python src\main.py --test
+```
+
+飞书群收到测试消息即表示配置正确。
+
+### 第六步：启动服务
+
+**方式一：前台运行**（推荐，窗口可见、方便调试）
+
+```
+双击 start.bat
+```
+
+保持窗口不关闭，电脑会在 09:00 / 15:30 / 21:00 自动推送。
+
+**方式二：后台静默运行**（不占用桌面）
+
+```
+双击 start_background.bat
+```
+
+---
+
+## Windows 服务管理
+
+| 操作 | 方式 |
+|------|------|
+| 查看运行状态 | 双击 `check_status.bat` |
+| 停止后台服务 | 双击 `stop.bat` |
+| 设置开机自启 | 双击 `setup_autostart.bat` |
+| 取消开机自启 | 双击 `remove_autostart.bat` |
+| 立即触发（调试） | 见下方命令 |
+
+```cmd
+python src\main.py --now premarket_asia   # 立即生成亚洲盘前报告
+python src\main.py --now postmarket_asia  # 立即生成收盘复盘
+python src\main.py --now premarket_us     # 立即生成美股盘前报告
+python src\main.py --validate             # 验证配置
+```
+
+## 注意事项
+
+**电脑需保持开机**：系统在 09:00 / 15:30 / 21:00 定时推送，电脑关机或休眠时不会推送。
+
+- 台式机：设置"从不睡眠"即可长期运行
+- 笔记本：建议接电源，设置屏幕关闭但不休眠
+- 若需彻底不间断推送：使用云服务器（见下方高级部署）
+
+**美国夏令时调整**：
+
+| 时期 | 美股开盘 CST | 建议设置 |
+|------|-------------|---------|
+| 夏令时（3月第2周 ~ 11月第1周） | 21:30 | `US_PREMARKET_HOUR=21` |
+| 冬令时（其余时间） | 22:30 | `US_PREMARKET_HOUR=22` |
+
+修改 `.env` 后重启服务生效。
+
+---
+
+## 分析引擎
+
+系统优先使用 Claude 大模型对所有市场数据进行第一性原则深度分析：
 
 ```
 市场价格 = f(盈利预期E, 无风险利率r, 流动性L, 风险情绪ρ)
 
-对每个新闻事件，Claude 会推理：
+对每个新闻事件，Claude 推理：
   1. 真实语义理解 → 正确处理否定句、同义词、上下文
-  2. 影响变量判断 → 影响哪个变量（E/r/L/ρ），方向和幅度
-  3. 传导链条推理 → 完整的逻辑路径（非模板拼接）
-  4. 跨事件联动 → 综合多个事件的复合影响
-  5. 个股映射 → 推理受影响个股并给出理由
+  2. 影响变量判断 → 哪个变量(E/r/L/ρ)，方向和幅度
+  3. 传导链条推理 → 完整逻辑路径（非模板拼接）
+  4. 跨事件联动  → 综合多个事件复合影响
+  5. 个股映射    → 推理受影响个股并给出理由
 ```
 
-**与规则引擎的关键差距：**
+未配置 `ANTHROPIC_API_KEY` 时自动降级为规则引擎（关键词匹配），但分析质量显著下降。
 
-| 维度 | 规则引擎（降级模式） | Claude 大模型（主模式） |
-|------|-----------------|-------------------|
-| 收盘复盘 | 重复早盘策略，无真正对比 | 真正对比预期 vs 实际，分析对错原因 |
-| 操作建议 | 信号计数后套模板句子 | 有逻辑推理的具体建议 |
-| 新闻理解 | "不加息"误匹配为利空信号 | 正确理解语义和否定句 |
-| 个股分析 | 无法输出受影响个股 | 独立推理并给出理由 |
+---
 
-## 数据来源（全部免费/可溯源）
+## 数据来源（全部免费）
 
-### 行情数据
-| 来源 | 覆盖范围 | 接口 |
-|------|---------|------|
-| [AKShare](https://akshare.akfamily.xyz/) | A股/港股/美股 | Python 库，免费 |
-| [Yahoo Finance](https://finance.yahoo.com/) | 全球股票/指数 | yfinance 库，免费 |
-| [BaoStock](http://baostock.com/) | A股历史数据 | Python 库，免费注册 |
-| [东方财富](https://www.eastmoney.com/) | A股实时行情 | 免费 JSON API |
+| 类型 | 来源 |
+|------|------|
+| A股行情 | AKShare、东方财富 |
+| 港股行情 | Yahoo Finance、AKShare |
+| 美股行情 | Yahoo Finance |
+| 财经新闻 | 财联社、东方财富、新浪财经、新华社 |
+| 政策动态 | 证监会、央行、美联储（官网 RSS） |
+| 机构研报 | 东方财富研报中心 |
+| 经济日历 | Investing.com、AKShare |
 
-### 新闻/政策
-| 来源 | 内容 | 接入方式 |
-|------|------|---------|
-| [财联社](https://www.cls.cn/) | 实时财经电报 | API |
-| [东方财富快讯](https://www.eastmoney.com/) | 7x24 快讯 | API |
-| [新浪财经](https://finance.sina.com.cn/) | 宏观/A股新闻 | RSS |
-| [新华社](http://www.xinhuanet.com/) | 政策解读 | RSS |
-| [美联储](https://www.federalreserve.gov/) | 货币政策公告 | 官方 RSS |
-| [中国人民银行](http://www.pbc.gov.cn/) | 货币政策公告 | 官网解析 |
-| [中国证监会](http://www.csrc.gov.cn/) | 监管公告 | 官网解析 |
-| [港交所 HKEX](https://www.hkex.com.hk/) | 市场公告 | 官网解析 |
-
-### 研究报告
-| 来源 | 内容 | 接入方式 |
-|------|------|---------|
-| [东方财富研报中心](https://data.eastmoney.com/report/) | 机构研报摘要 | 免费 API |
-
-### 经济日历
-| 来源 | 内容 | 接入方式 |
-|------|------|---------|
-| [Investing.com](https://cn.investing.com/economic-calendar/) | 全球经济数据日历 | API |
-| [AKShare 宏观数据](https://akshare.akfamily.xyz/) | CPI/PPI/PMI 等 | Python 库 |
-| [CNN Fear & Greed](https://edition.cnn.com/markets/fear-and-greed) | 市场情绪指数 | 免费 API |
-
-## 常用命令
-
-```bash
-# Docker 用户
-docker-compose logs -f                                          # 查看实时日志
-docker-compose exec market-brief python src/main.py --test     # 测试飞书
-docker-compose exec market-brief python src/main.py --now premarket_asia  # 立即推送亚洲盘前
-docker-compose exec market-brief python src/main.py --now postmarket_asia # 立即推送复盘
-docker-compose exec market-brief python src/main.py --now premarket_us    # 立即推送美股盘前
-docker-compose restart                                          # 重启服务
-docker-compose down && docker-compose up -d                    # 重新部署
-
-# 本地 Python 用户
-python src/main.py --validate          # 验证配置
-python src/main.py --test              # 测试飞书连接
-python src/main.py --now premarket_asia
-python src/main.py                     # 启动定时调度
-```
+---
 
 ## 目录结构
 
 ```
-market-morning-brief/
-├── .claude-plugin/plugin.json      # 插件元数据
-├── commands/                       # Claude 插件命令
-│   ├── premarket.md               # /market-morning-brief:premarket
-│   └── postmarket.md              # /market-morning-brief:postmarket
-├── skills/market-analysis/         # 技能知识库
-│   └── SKILL.md                   # 第一性原则分析框架说明
-├── src/
-│   ├── main.py                    # 主入口（调度器 + CLI）
-│   ├── config.py                  # 配置管理（含 ANTHROPIC_API_KEY）
-│   ├── fetchers/
-│   │   ├── news_fetcher.py        # 新闻/政策抓取（10个来源）
-│   │   ├── market_data.py         # 行情数据（A股/港股/美股）
-│   │   ├── research_fetcher.py    # 研报摘要（东方财富）
-│   │   └── economic_calendar.py   # 经济日历（Investing.com等）
-│   ├── analyzers/
-│   │   ├── claude_analyzer.py     # Claude 大模型分析（主引擎）
-│   │   └── rule_analyzer.py       # 规则引擎（未配置 API Key 时的降级兜底）
-│   └── notifiers/
-│       └── feishu.py              # 飞书消息卡片推送
-├── docker-compose.yml              # Docker 编排
-├── Dockerfile                      # Docker 镜像
-├── requirements.txt                # Python 依赖
-├── .env.example                   # 配置模板
-├── deploy.sh                      # 一键部署脚本
-└── README.md                      # 本文档
+market-morning-brief\
+├── install.bat              ← Windows 一键安装（从这里开始）
+├── start.bat                ← 前台启动（推荐调试）
+├── start_background.bat     ← 后台静默启动
+├── stop.bat                 ← 停止后台服务
+├── check_status.bat         ← 查看运行状态和最新日志
+├── setup_autostart.bat      ← 设置开机自启动
+├── remove_autostart.bat     ← 取消开机自启动
+├── .env.example             ← 配置模板（复制为 .env 后填写）
+├── .env                     ← 实际配置（你创建的，不提交 git）
+├── requirements.txt         ← Python 依赖
+├── cache\                   ← 自动创建，存放日志和策略记忆
+│   ├── market_brief.log     ← 运行日志
+│   └── last_strategy.json   ← 策略记忆（用于收盘复盘对比）
+└── src\
+    ├── main.py              ← 主入口（调度器 + CLI）
+    ├── config.py            ← 配置管理
+    ├── analyzers\
+    │   ├── claude_analyzer.py  ← Claude 大模型分析（主引擎）
+    │   └── rule_analyzer.py    ← 规则引擎（无 API Key 时的降级兜底）
+    ├── fetchers\            ← 数据抓取（新闻/行情/研报/经济日历）
+    └── notifiers\
+        └── feishu.py        ← 飞书消息卡片推送
 ```
+
+---
 
 ## 常见问题
 
-**Q: 不想用 Docker，可以直接用 Python 吗？**
-A: 可以。`pip install -r requirements.txt && python src/main.py` 即可。
+**Q: install.bat 安装失败怎么办？**
 
-**Q: 没有 Anthropic API Key 可以运行吗？**
-A: 可以，系统会自动降级为规则引擎（基于关键词匹配），但分析质量明显较低：收盘复盘无法真正对比早盘建议，操作建议为模板化输出，个股分析缺失。强烈建议配置 API Key 使用完整功能。
-
-**Q: 数据抓取失败怎么办？**
-A: 系统设计了多层降级：每个数据源失败会自动跳过，不影响整体分析。查看日志 `cache/market_brief.log` 了解详情。
-
-**Q: 怎么设置多个飞书群？**
-A: 在 `.env` 中用逗号分隔多个 Webhook URL：
+手动安装：
+```cmd
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
+
+**Q: 测试推送（--test）报错 "FEISHU_WEBHOOK_URLS 未设置"？**
+
+确认 `.env` 文件存在且 `FEISHU_WEBHOOK_URLS=` 后面已填写完整 URL（不是示例值）。
+
+**Q: 推送了但飞书没收到消息？**
+
+1. 检查飞书群是否添加了机器人
+2. Webhook URL 是否完整（以 `/hook/` 结尾的完整地址）
+3. 运行 `check_status.bat` 查看日志中的错误信息
+
+**Q: 能设置多个飞书群吗？**
+
+可以，逗号分隔：
+```ini
 FEISHU_WEBHOOK_URLS=https://open.feishu.cn/.../hook/xxx,https://open.feishu.cn/.../hook/yyy
 ```
 
-**Q: 美国夏令时/冬令时怎么处理？**
-A: 修改 `.env` 中的 `US_PREMARKET_HOUR`，夏令时设 21，冬令时设 22，然后 `docker-compose restart`。
+**Q: Claude 每日费用大概多少？**
 
-**Q: 可以自定义关注的股票吗？**
-A: 可以，在 `.env` 中设置 `WATCHLIST=600519,00700,AAPL,NVDA`（A股代码/港股代码/美股Ticker）。
+每日3次推送约 $0.06~0.15（约 ¥0.4~1.1），使用 claude-sonnet-4-6 模型。
 
-**Q: Claude 每次分析大概消耗多少 token？**
-A: 每次分析约 3,000~6,000 input tokens + 1,000~2,000 output tokens，使用 claude-sonnet-4-6 每次成本约 $0.02~0.05，每日3次约 $0.06~0.15。
+**Q: 电脑睡眠后任务还会触发吗？**
+
+不会。建议：控制面板 → 电源选项 → 从不睡眠（台式机），或使用云服务器。
+
+---
+
+## 高级部署（云服务器，7×24不间断）
+
+若需要电脑关机时也能推送，可用云服务器（1核1G，约¥30/月）：
+
+```bash
+# Ubuntu/Linux 服务器
+git clone https://github.com/straggler-liu/financial-services-plugins.git
+cd financial-services-plugins/market-morning-brief
+pip3 install -r requirements.txt
+cp .env.example .env && nano .env
+
+# 后台运行（systemd 方式）
+# 或简单方式：
+nohup python3 src/main.py > cache/nohup.log 2>&1 &
+
+# Docker 方式（需安装 Docker）
+docker-compose up -d
+```
+
+---
 
 ## 免责声明
 
-本系统生成的分析报告基于公开可获取的数据，由 Claude AI 辅助分析生成。所有分析仅供参考，不构成任何投资建议。投资决策需自行承担风险，建议在做出投资决定前咨询专业金融顾问。数据来源均已标注，但不对数据准确性作出保证。
+本系统生成的分析报告基于公开可获取的数据，由 Claude AI 辅助分析生成。所有分析仅供参考，不构成任何投资建议。投资决策需自行承担风险。数据来源均已标注，但不对数据准确性作出保证。

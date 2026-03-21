@@ -39,6 +39,9 @@ from analyzers.rule_analyzer import RuleAnalyzer
 from notifiers.feishu import FeishuNotifier
 
 # ── 日志配置 ───────────────────────────────────────────────────────────
+# 确保 cache 目录在写日志前存在（Windows 首次运行时 /app/cache 不存在）
+Path(config.cache_dir).mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     level=getattr(logging, config.log_level, logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -48,7 +51,7 @@ logging.basicConfig(
         logging.FileHandler(
             Path(config.cache_dir) / "market_brief.log",
             encoding="utf-8",
-        ) if Path(config.cache_dir).exists() else logging.StreamHandler(),
+        ),
     ],
 )
 logger = logging.getLogger("market_brief")
